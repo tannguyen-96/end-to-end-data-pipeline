@@ -1,0 +1,5 @@
+TODO1 --DONE
+Postgres source -> CDC debezium to Kafka -> Airflow dag stream Kafka to s3
+
+TODO2
+Merge partition s3 folder to snowflake

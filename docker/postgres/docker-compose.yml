@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: zomato-source
+    networks: [cdc-net]
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_slot_wal_keep_size=5GB"]
+    restart: unless-stopped
+    # Single source of truth: the repo-root .env (POSTGRES_USER/PASSWORD/DB/PORT).
+    env_file: ../../.env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # $$ -> a literal $, so the container's shell expands POSTGRES_USER/POSTGRES_DB
+      # (the values injected above from the root .env).
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+
+networks:
+  cdc-net:
+    external: true

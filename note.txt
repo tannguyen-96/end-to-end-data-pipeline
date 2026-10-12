@@ -1,0 +1,13 @@
+# Harlequin postgres playground
+sudo apt install pipx
+pipx install "harlequin[postgres]"
+harlequin -a postgres "postgresql://admin:admin@localhost:5432/postgres"
+
+# Set wal_level logical to let postgres write row level detail
+# Postgres logs every change in the WAL → Debezium reads it through a replication slot → turns it into JSON events → sends them to Kafka.
+ALTER SYSTEM SET wal_level = logical;
+docker restart <container>
+SHOW wal_level;
+
+# Create docker network
+docker network create cdc-net

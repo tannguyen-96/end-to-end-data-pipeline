@@ -1,0 +1,44 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "big-pickle": {
+      "description": "Big-Pickle",
+      "mode": "primary",
+      "model": "opencode/big-pickle"
+    },
+    "deepseek": {
+      "description": "DeepSeek",
+      "mode": "primary",
+      "model": "opencode/deepseek"
+    },
+    "mimo": {
+      "description": "MiMo",
+      "mode": "primary",
+      "model": "opencode/north-mini-code-free"
+    },
+    "subagent": {
+      "description": "Subagent",
+      "mode": "subagent",
+      "model": "opencode/deepseek",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    }
+  },
+  "mcp": {
+    "servers": {
+      "postgres": {
+        "type": "local",
+        "command": ["npx", "-y", "@henkey/postgres-mcp-server"],
+        "environment": {
+          "POSTGRES_CONNECTION_STRING": "postgresql://admin:admin@localhost:5432/postgres"
+        }
+      }
+    }
+  },
+  "instructions": [
+    "AGENTS.md"
+  ]
+}

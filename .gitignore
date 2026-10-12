@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python-version
+
+# Env / secrets
+.env
+
+# Local data (large CSVs, ~2.3 GB; not versioned)
+data/*.csv
+data/*.parquet
+
+# Airflow
+docker/airflow/logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
