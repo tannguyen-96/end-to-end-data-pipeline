@@ -1,0 +1,41 @@
+[0m23:16:15.799343 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001C8EE35C110>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001C8EE4053D0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001C8EE404C10>]}
+
+
+============================== 23:16:15.902846 | 13a8f1c2-94fd-4b03-a820-92cb6ea8b467 ==============================
+[0m23:16:15.902846 [info ] [MainThread]: Running with dbt=1.12.5
+[0m23:16:15.904743 [debug] [MainThread]: running dbt with arguments {'maximum_seed_size_mib': '1', 'no_print': 'None', 'static_parser': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'target_path': 'None', 'version_check': 'True', 'printer_width': '80', 'write_json': 'True', 'introspect': 'True', 'log_cache_events': 'False', 'empty': 'None', 'cache_selected_only': 'False', 'log_format': 'default', 'debug': 'False', 'fail_fast': 'False', 'partial_parse': 'True', 'send_anonymous_usage_stats': 'True', 'quiet': 'False', 'warn_error': 'None', 'profiles_dir': 'C:\\Users\\nghoa\\.dbt', 'use_colors': 'True', 'hints_enabled': 'True', 'invocation_command': 'dbt init', 'use_experimental_parser': 'False', 'indirect_selection': 'eager', 'log_path': 'logs'}
+[0m23:16:47.235637 [debug] [MainThread]: Starter project path: C:\Users\nghoa\Desktop\projects\end-to-end-data-pipeline\.venv\Lib\site-packages\dbt\include\starter_project
+[0m23:16:47.318086 [info ] [MainThread]: Setting up your profile.
+[0m23:16:47.320084 [error] [MainThread]: [[31mERROR[0m]: Encountered an error:
+Runtime Error
+  No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/connect-adapters#install-using-the-cli
+[0m23:16:47.321085 [debug] [MainThread]: Command `dbt init` failed at 23:16:47.321085 after 31.64 seconds
+[0m23:16:47.321085 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001C8EE4053D0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001C8EE3FFBD0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000001C8EE3FFB10>]}
+[0m23:16:47.322363 [debug] [MainThread]: Flushing usage events
+[0m23:16:48.566855 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m23:17:03.759399 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000014E3548F990>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000014E355250D0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000014E354FE690>]}
+
+
+============================== 23:17:03.763355 | d93396d3-ebfc-448a-8397-d27aef5aed86 ==============================
+[0m23:17:03.763355 [info ] [MainThread]: Running with dbt=1.12.5
+[0m23:17:03.763883 [debug] [MainThread]: running dbt with arguments {'version_check': 'True', 'no_print': 'None', 'maximum_seed_size_mib': '1', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'target_path': 'None', 'static_parser': 'True', 'printer_width': '80', 'write_json': 'True', 'empty': 'None', 'log_cache_events': 'False', 'introspect': 'True', 'cache_selected_only': 'False', 'log_format': 'default', 'debug': 'False', 'fail_fast': 'False', 'partial_parse': 'True', 'send_anonymous_usage_stats': 'True', 'quiet': 'False', 'warn_error': 'None', 'profiles_dir': 'C:\\Users\\nghoa\\.dbt', 'use_colors': 'True', 'hints_enabled': 'True', 'invocation_command': 'dbt init', 'use_experimental_parser': 'False', 'indirect_selection': 'eager', 'log_path': 'logs'}
+[0m23:17:07.541163 [debug] [MainThread]: Starter project path: C:\Users\nghoa\Desktop\projects\end-to-end-data-pipeline\.venv\Lib\site-packages\dbt\include\starter_project
+[0m23:17:07.565163 [info ] [MainThread]: Setting up your profile.
+[0m23:17:18.292900 [error] [MainThread]: [[31mERROR[0m]: Encountered an error:
+Runtime Error
+  No adapters available. Learn how to install an adapter by going to https://docs.getdbt.com/docs/connect-adapters#install-using-the-cli
+[0m23:17:18.293894 [debug] [MainThread]: Command `dbt init` failed at 23:17:18.293894 after 14.64 seconds
+[0m23:17:18.294894 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000014E35496250>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000014E353DC050>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000014E3548FB50>]}
+[0m23:17:18.294894 [debug] [MainThread]: Flushing usage events
+[0m23:17:19.477774 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m23:21:15.133802 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000022862201D90>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000002286446CB90>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x0000022864396B10>]}
+
+
+============================== 23:21:15.136341 | 7cc04aff-4a9c-4d25-9735-b385f57e96d4 ==============================
+[0m23:21:15.136341 [info ] [MainThread]: Running with dbt=1.12.5
+[0m23:21:15.138343 [debug] [MainThread]: running dbt with arguments {'maximum_seed_size_mib': '1', 'no_print': 'None', 'static_parser': 'True', 'target_path': 'None', 'version_check': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'printer_width': '80', 'write_json': 'True', 'introspect': 'True', 'log_cache_events': 'False', 'empty': 'None', 'cache_selected_only': 'False', 'fail_fast': 'False', 'debug': 'False', 'log_format': 'default', 'partial_parse': 'True', 'send_anonymous_usage_stats': 'True', 'quiet': 'False', 'warn_error': 'None', 'profiles_dir': 'C:\\Users\\nghoa\\.dbt', 'invocation_command': 'dbt init', 'hints_enabled': 'True', 'use_colors': 'True', 'use_experimental_parser': 'False', 'indirect_selection': 'eager', 'log_path': 'logs'}
+[0m23:21:22.587540 [info ] [MainThread]: A project called zomato already exists here.
+[0m23:21:22.588551 [debug] [MainThread]: Command `dbt init` succeeded at 23:21:22.588551 after 7.58 seconds
+[0m23:21:22.588551 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000002286445B4D0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000002286445B450>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x000002286445B990>]}
+[0m23:21:22.588551 [debug] [MainThread]: Flushing usage events
+[0m23:21:23.840977 [debug] [MainThread]: An error was encountered while trying to flush usage events

@@ -59,18 +59,44 @@ python data/verify_data.py --db               # compare CSV row counts vs the DB
 
 | DAG | File | Behavior | Use when |
 |---|---|---|---|
-| `kafka_to_s3` | `pipeline.py` | All 7 tables as **independent tasks run in parallel** | Dedicated box with RAM/CPU headroom |
-| `kafka_to_s3_sequential` | `pipeline_sequential.py` | **One table at a time** (`max_active_tasks=1`, chained tasks) | **Dev machine — recommended** |
+| `kafka_to_s3` | `pipeline.py` | **End-to-end**: per table, CDC export → wait → COPY → MERGE | Full pipeline |
+| `snowflake_setup` | `snowflake_setup.py` | Create warehouse/db/schema/stage + target/`_raw` tables (`sql/00_setup.sql`) | Once, or triggered by `kafka_to_s3` |
+| `kafka_to_s3_sequential` | `pipeline_sequential.py` | CDC only, **one table at a time** (`max_active_tasks=1`, chained) | Dev machine — CDC only |
 
-Manual trigger only (`schedule=None`). The export logic is table-agnostic; the DAGs
-differ only in *how many tables run concurrently*.
+Manual trigger only (`schedule=None`). `ds` is the run's logical date and becomes the S3
+`load_date=<ds>` folder; all variants use `kafka_export.export_parallel(table, ds)`.
 
 ```sh
-docker exec airflow-scheduler-1 airflow dags trigger kafka_to_s3_sequential
+docker exec airflow-scheduler-1 airflow dags trigger snowflake_setup        # once
+docker exec airflow-scheduler-1 airflow dags trigger kafka_to_s3 --logical-date 2026-10-13
 ```
 
-Both call `kafka_export.export_parallel(table, ds)`; `ds` is the run's logical date
-and becomes the S3 `load_date=<ds>` folder.
+## Snowflake load (inside `kafka_to_s3`)
+
+`kafka_to_s3` is the end-to-end DAG. Per table it chains the CDC export with the Snowflake
+load:
+
+1. `consume_<table>` — drain the topic to `s3://<bucket>/<table>/load_date={{ ds }}/`.
+2. `wait_<table>` — `S3KeySensor` on `<table>/load_date={{ ds }}/<table>-*.parquet`
+   (wildcard, reschedule mode, 1 h timeout).
+3. `copy_<table>` — clears that date in `ZOMATO.RAW.<table>_raw`, then `COPY INTO` from
+   `@ZOMATO.RAW.S3_CDC_STAGE/<table>/load_date={{ ds }}/`.
+4. `merge_<table>` — dedupes the batch to the latest event per primary key
+   (`__source_ts_ms DESC`) and MERGEs into `ZOMATO.RAW.<table>`: matched + `op='d'`
+   deletes, a newer `__source_ts_ms` updates, otherwise inserts (`op='r'` is an upsert).
+
+Before any table runs, `kafka_to_s3` triggers the separate **`snowflake_setup`** DAG
+(`snowflake_setup.py`), which runs `sql/00_setup.sql` to create the warehouse, database,
+schema, external stage, and the target/`_raw` tables. Every statement there is
+`CREATE ... IF NOT EXISTS`, so it is safe to re-run.
+
+SQL lives in `docker/airflow/dags/sql/` (`copy_*.sql`, `merge_*.sql`, `00_setup.sql`).
+Re-running a date is idempotent (the `_raw` partition is cleared before COPY and the MERGE
+is timestamp-guarded).
+
+Notes: the topic carries no LSN column, so `__source_ts_ms` is the recency key. Debezium
+emits `numeric` as base64 (two's-complement big-endian) and dates/timestamps as integer
+days/microseconds; `merge_*.sql` decodes these back to typed columns.
 
 ## Kafka → S3 exporter design (`kafka_export.py`)
 

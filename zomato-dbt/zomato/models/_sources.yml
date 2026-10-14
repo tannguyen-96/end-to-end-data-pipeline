@@ -1,0 +1,19 @@
+sources:
+  - name: landing
+    database: ZOMATO
+    schema: LANDING
+    tables:
+      - name: restaurant
+        description: "Raw restaurants data from Zomato"
+      - name: reviews
+        description: "Raw reviews data from Zomato"
+      - name: users
+        description: "Raw users data from Zomato"
+      - name: food
+        description: "Raw food data from Zomato"
+      - name: menu
+        description: "Raw menu data from Zomato"
+      - name: orders
+        description: "Raw orders data from Zomato"
+      - name: order_items
+        description: "Raw order items data from Zomato"

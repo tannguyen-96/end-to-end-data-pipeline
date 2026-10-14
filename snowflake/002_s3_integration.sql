@@ -1,0 +1,16 @@
+-- https://docs.snowflake.com/en/user-guide/data-load-s3-config-storage-integration
+
+USE ROLE ACCOUNTADMIN;
+
+CREATE OR REPLACE STORAGE INTEGRATION ZOMATO_S3_INTEGRATION
+  TYPE = EXTERNAL_STAGE
+  STORAGE_PROVIDER = 'S3'
+  ENABLED = TRUE
+  STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::678835429553:role/SnowflakeS3Role'
+  STORAGE_ALLOWED_LOCATIONS = ('s3://zomato-pipeline-s3/');
+
+GRANT USAGE ON INTEGRATION ZOMATO_S3_INTEGRATION TO ROLE DBT_ROLE;
+
+DESC INTEGRATION ZOMATO_S3_INTEGRATION;
+-- STORAGE_AWS_IAM_USER_ARN  ->  the "AWS": principal in the trust policy
+-- STORAGE_AWS_EXTERNAL_ID   ->  the sts:ExternalId condition

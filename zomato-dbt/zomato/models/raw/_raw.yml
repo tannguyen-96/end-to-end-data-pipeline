@@ -1,0 +1,85 @@
+models:
+  - name: food
+    description: "Latest food-item CDC state, one row per f_id. LANDING.food has no __op, so _is_deleted is always false."
+    columns:
+      - name: f_id
+        description: "Food id (primary key)."
+        data_tests:
+          - unique
+          - not_null
+      - name: _is_deleted
+        data_tests:
+          - not_null
+
+  - name: menu
+    description: "Latest menu CDC state, one row per (menu_id, f_id)."
+    columns:
+      - name: menu_id
+        data_tests:
+          - not_null
+      - name: f_id
+        data_tests:
+          - not_null
+      - name: _is_deleted
+        data_tests:
+          - not_null
+
+  - name: restaurant
+    description: "Latest restaurant CDC state, one row per id."
+    columns:
+      - name: id
+        description: "Restaurant id (primary key)."
+        data_tests:
+          - unique
+          - not_null
+      - name: _is_deleted
+        data_tests:
+          - not_null
+
+  - name: users
+    description: "Latest user CDC state, one row per user_id."
+    columns:
+      - name: user_id
+        description: "User id (primary key)."
+        data_tests:
+          - unique
+          - not_null
+      - name: _is_deleted
+        data_tests:
+          - not_null
+
+  - name: order_items
+    description: "Latest order-item CDC state, one row per order_item_id."
+    columns:
+      - name: order_item_id
+        description: "Order item id (primary key)."
+        data_tests:
+          - unique
+          - not_null
+      - name: _is_deleted
+        data_tests:
+          - not_null
+
+  - name: orders
+    description: "Latest order CDC state, one row per order_id."
+    columns:
+      - name: order_id
+        description: "Order id (primary key)."
+        data_tests:
+          - unique
+          - not_null
+      - name: _is_deleted
+        data_tests:
+          - not_null
+
+  - name: reviews
+    description: "Latest review CDC state, one row per review_id."
+    columns:
+      - name: review_id
+        description: "Review id (primary key)."
+        data_tests:
+          - unique
+          - not_null
+      - name: _is_deleted
+        data_tests:
+          - not_null

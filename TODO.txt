@@ -1,5 +1,11 @@
 TODO1 --DONE
 Postgres source -> CDC debezium to Kafka -> Airflow dag stream Kafka to s3
 
-TODO2
-Merge partition s3 folder to snowflake
+TODO2 --50%
+S3 to snowflake incremental -> merge into raw table
+
+TODO3 
+Transformation
+
+TODO4
+LLMs enrichment -> Build vector table -> similarity search engine

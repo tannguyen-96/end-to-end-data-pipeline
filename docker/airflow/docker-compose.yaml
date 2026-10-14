@@ -21,11 +21,10 @@ x-airflow-common: &airflow-common
     # Docker host gateway. This OVERRIDES POSTGRES_HOST=localhost from the root .env, which
     # is right for the host scripts (data/import_data.py) but wrong from inside a container.
     POSTGRES_HOST: host.docker.internal
-    # Kafka config (KAFKA_BOOTSTRAP_SERVERS, KAFKA_GROUP_ID) comes from the root .env
-    # via env_file; the kafka_to_s3 DAG reads them from the process environment.
-    # Snowflake conn, assembled from the SNOWFLAKE_* vars in the root .env, so compose needs
-    # --env-file ../../.env for these to interpolate.
-    AIRFLOW_CONN_SNOWFLAKE_DEFAULT: '{"conn_type":"snowflake","login":"${SNOWFLAKE_USER}","password":"${SNOWFLAKE_PASSWORD}","schema":"RAW","extra":{"account":"${SNOWFLAKE_ACCOUNT}","warehouse":"OLIST_WH","database":"OLIST","role":"DBT_ROLE"}}'
+    SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+    SNOWFLAKE_USER: ${SNOWFLAKE_USER}
+    SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD}
+    AIRFLOW_CONN_SNOWFLAKE_DEFAULT: '{"conn_type":"snowflake","login":"${SNOWFLAKE_USER}","password":"${SNOWFLAKE_PASSWORD}","schema":"RAW","extra":{"account":"${SNOWFLAKE_ACCOUNT}","warehouse":"ZOMATO_WAREHOUSE","database":"ZOMATO","role":"DBT_ROLE"}}'
   # Single source of truth: the repo-root .env feeds SNOWFLAKE_*, AWS_*, S3_BUCKET,
   # GEMINI_API_KEY and POSTGRES_* straight into every Airflow container.
   env_file:
