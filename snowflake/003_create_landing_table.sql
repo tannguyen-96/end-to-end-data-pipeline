@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS ZOMATO.LANDING.food (
   f_id STRING,
   item STRING,
   veg_or_non_veg STRING,
+  __op STRING,
   __source_ts_ms NUMBER(38,0),
   _load_date TIMESTAMP,
   _filename STRING

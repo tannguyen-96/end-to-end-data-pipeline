@@ -31,13 +31,8 @@ x-airflow-common: &airflow-common
     - ../../.env
   volumes:
     - ./dags:/opt/airflow/dags
-    # Named volume (not a bind mount): on Windows a bind-mounted logs/ is root:root 755,
-    # so the airflow user (uid 50000) cannot create logs/dag_processor/... and the
-    # dag-processor crash-loops. The volume inherits the image's airflow-owned dir.
-    - logs:/opt/airflow/logs
-    #- ../olist-dbt:/opt/airflow/dbt/olist
-    #- ../ai:/opt/airflow/ai
-  # Shared with Postgres + Kafka so tasks can consume Kafka by service name (kafka:9092).
+    - ./logs:/opt/airflow/logs
+    - ../../zomato-dbt/zomato:/opt/airflow/dbt/zomato
   networks:
     - default
     - cdc-net

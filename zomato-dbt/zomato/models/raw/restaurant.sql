@@ -4,26 +4,18 @@
     incremental_strategy='merge',
     on_schema_change='append_new_columns',
 ) }}
-
--- ZOMATO.RAW.restaurant — latest CDC state per id, merged from the append-only LANDING
--- source. Soft delete: __op = 'd' sets _is_deleted = true (row kept).
-
 with source as (
-
     select * from {{ source('landing', 'restaurant') }}
     {% if is_incremental() %}
-    where __source_ts_ms > (select coalesce(max(__source_ts_ms), 0) from {{ this }})
+    where _load_date > (select coalesce(max(_load_date), '1970-01-01'::timestamp) from {{ this }})
     {% endif %}
-
 ),
-
 latest as (
-
     select
         id,
         name,
         city,
-        {{ base64_to_number('rating', 10) }} as rating,
+        rating,
         rating_count,
         cost,
         cuisine,
@@ -31,11 +23,9 @@ latest as (
         link,
         address,
         menu,
-        __source_ts_ms,
-        (__op = 'd') as _is_deleted
+        _load_date as updated_at,
+        coalesce(__op = 'd', false) as _is_deleted
     from source
-    qualify row_number() over (partition by id order by __source_ts_ms desc, idx desc) = 1
-
+    qualify row_number() over (partition by id order by _load_date desc, idx desc) = 1
 )
-
 select * from latest

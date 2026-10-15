@@ -7,6 +7,10 @@ __pycache__/
 # Env / secrets
 .env
 
+# dbt profiles (contains Snowflake credentials)
+profiles.yml
+.user.yml
+
 # Local data (large CSVs, ~2.3 GB; not versioned)
 data/*.csv
 data/*.parquet

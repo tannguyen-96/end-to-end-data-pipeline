@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor
+import base64
+from decimal import Decimal
 import json
 import os
 import queue
@@ -14,6 +16,42 @@ from kafka import KafkaConsumer
 from kafka.structs import OffsetAndMetadata, TopicPartition
 
 TABLES = ["menu", "orders", "users", "restaurant", "reviews", "food", "order_items"]
+
+NUMERIC_COLUMNS: dict[str, dict[str, int]] = {
+    "menu": {"price": 2},
+    "orders": {
+        "subtotal": 2,
+        "discount": 2,
+        "delivery_fee": 2,
+        "gst": 2,
+        "sales_amount": 2,
+        "customer_rating": 1,
+        "delivery_time_min": 1,
+    },
+    "restaurant": {"rating": 1},
+    "order_items": {"price": 2, "line_amount": 2},
+}
+
+def _decode_numeric(value: str | None, scale: int) -> Decimal | None:
+    """base64 (two's-complement big-endian, unscaled) -> Decimal scaled by 10**-scale."""
+    if value is None or not isinstance(value, str):
+        return value
+    bytes = base64.b64decode(value)
+    unscaled = int.from_bytes(bytes, byteorder="big", signed=True)
+    return Decimal(unscaled).scaleb(-scale)
+
+
+def decode_numerics(table: str, rows: list) -> list:
+    """Rewrite Debezium base64 `numeric` columns to Decimal in-place (Parquet keeps precision)."""
+    columns = NUMERIC_COLUMNS.get(table)
+    if not columns:
+        return rows
+    for row in rows:
+        for column, scale in columns.items():
+            if column in row:
+                row[column] = _decode_numeric(row[column], scale)
+    return rows
+
 
 TOPIC_PREFIX = "pg.public"
 BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
@@ -38,6 +76,8 @@ def upload_to_s3(table: str, partition: int, ds: str, start: int, end: int,
     """Serialize one chunk to Parquet and upload, retrying with exponential backoff."""
     if not rows:
         return
+    # Sample encode value 12.50 -> unscaled 1250 -> bytes 0x04 0xE2 -> base64 "BOI="
+    rows = decode_numerics(table, rows) # base64 numeric -> Decimal before Parquet
     buffer = pa.BufferOutputStream()
     pq.write_table(pa.Table.from_pylist(rows), buffer)
     body = buffer.getvalue().to_pybytes() # parquet format bytes

@@ -32,5 +32,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 models:
   zomato:
     raw: # incremental merge LANDING to RAW
+      +schema: RAW
       +materialized: incremental
       +incremental_strategy: merge
+    staging:
+      +schema: STAGING
+      +materialized: view
