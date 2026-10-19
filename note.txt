@@ -11,3 +11,8 @@ SHOW wal_level;
 
 # Create docker network
 docker network create cdc-net
+
+# ollama local
+ollama pull qwen2.5:3b
+ollama pull nomic-embed-text
+ollama serve

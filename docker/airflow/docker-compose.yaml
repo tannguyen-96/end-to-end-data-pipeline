@@ -21,6 +21,13 @@ x-airflow-common: &airflow-common
     # Docker host gateway. This OVERRIDES POSTGRES_HOST=localhost from the root .env, which
     # is right for the host scripts (data/import_data.py) but wrong from inside a container.
     POSTGRES_HOST: host.docker.internal
+    # Local Ollama also runs on the host: `localhost` inside the container is the
+    # container itself, so enrich_reviews.py talks to the host gateway. Override
+    # ENRICH_BASE_URL in .env to point at a hosted/OpenAI-compatible endpoint.
+    ENRICH_BASE_URL: ${ENRICH_BASE_URL:-http://host.docker.internal:11434}
+    # Same host gateway for embedding_reviews.py (`ollama pull nomic-embed-text`).
+    EMBED_BASE_URL: ${EMBED_BASE_URL:-http://host.docker.internal:11434}
+    EMBED_MODELS: ${EMBED_MODELS:-nomic-embed-text}
     SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
     SNOWFLAKE_USER: ${SNOWFLAKE_USER}
     SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD}

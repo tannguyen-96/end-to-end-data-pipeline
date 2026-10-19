@@ -1,0 +1,2 @@
+dim (Who/What/Where) -> GROUP BY/WHERE/ORDER BY
+fact (What happend/Event) -> SUM/COUNT/AVG

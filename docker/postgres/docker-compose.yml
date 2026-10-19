@@ -1,6 +1,11 @@
 services:
   postgres:
-    image: postgres:17
+    # pgvector/pgvector:pg17-trixie is postgres:17 (Debian 13) plus the `vector`
+    # extension, needed by public.review_embeddings in data/ddl.sql. The -trixie
+    # variant matters: postgres:17 is Debian 13 / glibc 2.41, and the plain
+    # pg17 tag is Debian 12 / glibc 2.36, which makes the existing data volume
+    # warn "database was created using collation version 2.41".
+    image: pgvector/pgvector:pg17-trixie
     container_name: zomato-source
     networks: [cdc-net]
     command: ["postgres", "-c", "wal_level=logical", "-c", "max_slot_wal_keep_size=5GB"]

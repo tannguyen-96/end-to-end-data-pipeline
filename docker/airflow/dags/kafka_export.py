@@ -65,7 +65,6 @@ UPLOAD_MAX_RETRIES = int(os.environ.get("UPLOAD_MAX_RETRIES", "5"))
 UPLOAD_BACKOFF_BASE_S = float(os.environ.get("UPLOAD_BACKOFF_BASE_S", "1"))
 IDLE_TIMEOUT_MS = int(os.environ.get("IDLE_TIMEOUT_MS", "10_000"))
 
-
 def _s3_key(table: str, partition: int, ds: str, start: int, end: int) -> str:
     # table/load_date=2026-01-01/table-p0-o0-50000.parquet
     return f"{table}/load_date={ds}/{table}-p{partition}-o{start}-{end}.parquet"
@@ -73,9 +72,9 @@ def _s3_key(table: str, partition: int, ds: str, start: int, end: int) -> str:
 
 def upload_to_s3(table: str, partition: int, ds: str, start: int, end: int,
                  rows: list) -> None:
-    """Serialize one chunk to Parquet and upload, retrying with exponential backoff."""
     if not rows:
         return
+    rows = [json.loads(r) if r else None for r in rows] # raw bytes -> dicts
     # Sample encode value 12.50 -> unscaled 1250 -> bytes 0x04 0xE2 -> base64 "BOI="
     rows = decode_numerics(table, rows) # base64 numeric -> Decimal before Parquet
     buffer = pa.BufferOutputStream()
@@ -110,7 +109,7 @@ def export_partition(table: str, partition: int, ds: str) -> int:
         group_id=GROUP_ID,
         auto_offset_reset="earliest",  # first run picks up the Debezium snapshot
         enable_auto_commit=False,      # set manual commit offset
-        value_deserializer=lambda b: json.loads(b) if b else None,
+        value_deserializer=None,       # keep raw bytes, decode later in uploader threads
     )
     try:
         consumer.assign([tp])
@@ -200,14 +199,14 @@ def export_partition(table: str, partition: int, ds: str) -> int:
     finally:
         consumer.close()
 
-
 def export_parallel(table: str, ds: str) -> int:
-    probe = KafkaConsumer(bootstrap_servers=BOOTSTRAP_SERVERS)
+    # Give the metadata probe a group id so it doesn't log "disabling auto-commit".
+    probe = KafkaConsumer(bootstrap_servers=BOOTSTRAP_SERVERS,
+                          group_id=f"{GROUP_ID}-probe", enable_auto_commit=False)
     partitions = sorted(probe.partitions_for_topic(f"{TOPIC_PREFIX}.{table}"))
     probe.close()
 
-    # Min 2 workers prevent OOM local machine
-    with ProcessPoolExecutor(max_workers=min(len(partitions), 2)) as pool:
+    with ProcessPoolExecutor(max_workers=1) as pool:
         results = pool.map(export_partition,
                            [table] * len(partitions),
                            partitions,

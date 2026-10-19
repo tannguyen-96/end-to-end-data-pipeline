@@ -1,0 +1,23 @@
+select
+    o.order_id,
+    o.customer_id,
+    o.restaurant_id,
+    o.order_timestamp,
+    o.order_date,
+    to_number(to_char(o.order_date, 'YYYYMMDD')) as date_key,
+    o.city,
+    o.cuisine,
+    o.items_count,
+    o.sales_qty,
+    o.subtotal,
+    o.discount,
+    o.delivery_fee,
+    o.gst,
+    o.sales_amount,
+    o.currency,
+    o.payment_method,
+    o.order_status,
+    o.is_delivered,
+    o.customer_rating,
+    o.delivery_time_min
+from {{ ref('stg_orders') }} o

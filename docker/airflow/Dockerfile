@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir \
       openai \
       kafka-python \
       pyarrow \
-      boto3
+      boto3 \
+      pgvector
 
 # dbt in its own venv so it never clashes with Airflow's deps. DAG calls /opt/airflow/dbt_venv/bin/dbt
 RUN python -m venv /opt/airflow/dbt_venv && \

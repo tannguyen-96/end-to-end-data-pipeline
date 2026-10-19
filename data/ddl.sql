@@ -1,16 +1,3 @@
--- DDL for the food-delivery dataset in data/*.csv.
--- Table names are the plain file stems: <name>.csv -> <name>.
--- Target: the local Postgres in docker/postgres (replaces the hosted Supabase).
---
--- Notes on typing:
---   * An unnamed leading index column exists in users/restaurant/food/menu; it is
---     dropped on import (see data/import_data.py).
---   * restaurant.rating carries the placeholder '--' (too few ratings); the loader
---     maps it to NULL.
---   * restaurant.cost / rating_count are free text ('₹ 1 200', '100+ ratings').
---   * No FOREIGN KEY constraints are declared; the relationships in data/ERD.md are
---     logical and enforced by the loader/importer only.
-
 create table if not exists public.users (
     user_id                   integer primary key,
     name                      text,
@@ -95,3 +82,24 @@ create table if not exists public.reviews (
     comment        text,
     review_date    date
 );
+
+create extension if not exists vector;
+
+create table if not exists public.review_embeddings (
+    review_id        integer primary key,
+    order_id         integer,
+    restaurant_id    integer,
+    rating           smallint,
+    comment          text,
+    row_hash         text,                       -- md5(comment) change detection
+    embedding        vector(768),                -- nomic-embed-text
+    embedding_model  text,
+    embedded_at      timestamptz not null default now()
+);
+
+-- Approximate nearest neighbour index for cosine distance ('<=>').
+create index if not exists review_embeddings_embedding_hnsw
+    on public.review_embeddings using hnsw (embedding vector_cosine_ops);
+
+create index if not exists review_embeddings_restaurant_id_idx
+    on public.review_embeddings (restaurant_id);

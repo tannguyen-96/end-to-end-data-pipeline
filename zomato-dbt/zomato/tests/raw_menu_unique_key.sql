@@ -1,4 +1,4 @@
--- Composite-key uniqueness for menu: fails if any (menu_id, f_id) appears more than once.
+-- menu_id + f_id should be unique
 select
     menu_id,
     f_id,

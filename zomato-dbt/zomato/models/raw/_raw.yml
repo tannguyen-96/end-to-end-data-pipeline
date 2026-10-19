@@ -1,18 +1,24 @@
 models:
   - name: food
-    description: "Latest food-item CDC state, one row per f_id. LANDING.food has no __op, so _is_deleted is always false."
+    description: "Raw food data from cdc debezium landing tables"
     columns:
       - name: f_id
         description: "Food id (primary key)."
         data_tests:
           - unique
           - not_null
-      - name: _is_deleted
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: updated_at
         data_tests:
           - not_null
 
   - name: menu
-    description: "Latest menu CDC state, one row per (menu_id, f_id)."
+    description: "Raw menu data from cdc debezium landing tables"
     columns:
       - name: menu_id
         data_tests:
@@ -20,66 +26,219 @@ models:
       - name: f_id
         data_tests:
           - not_null
-      - name: _is_deleted
+          - relationships:
+              arguments:
+                to: ref('food')
+                field: f_id
+      - name: r_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('restaurant')
+                field: id
+              config:
+                severity: warn
+      - name: price
+        data_tests:
+          - not_null
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: updated_at
         data_tests:
           - not_null
 
   - name: restaurant
-    description: "Latest restaurant CDC state, one row per id."
+    description: "Raw restaurant data from cdc debezium landing tables"
     columns:
       - name: id
         description: "Restaurant id (primary key)."
         data_tests:
           - unique
           - not_null
-      - name: _is_deleted
+      - name: city
+        data_tests:
+          - not_null
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: updated_at
         data_tests:
           - not_null
 
   - name: users
-    description: "Latest user CDC state, one row per user_id."
+    description: "Raw user data from cdc debezium landing tables"
     columns:
       - name: user_id
         description: "User id (primary key)."
         data_tests:
           - unique
           - not_null
-      - name: _is_deleted
+      - name: name
+        data_tests:
+          - not_null
+      - name: email
+        data_tests:
+          - not_null
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: updated_at
         data_tests:
           - not_null
 
   - name: order_items
-    description: "Latest order-item CDC state, one row per order_item_id."
+    description: "Raw order-item data from cdc debezium landing tables"
     columns:
       - name: order_item_id
         description: "Order item id (primary key)."
         data_tests:
           - unique
           - not_null
-      - name: _is_deleted
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('orders')
+                field: order_id
+      - name: r_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('restaurant')
+                field: id
+      - name: f_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('food')
+                field: f_id
+      - name: price
+        data_tests:
+          - not_null
+      - name: quantity
+        data_tests:
+          - not_null
+      - name: line_amount
+        data_tests:
+          - not_null
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: updated_at
         data_tests:
           - not_null
 
   - name: orders
-    description: "Latest order CDC state, one row per order_id."
+    description: "Raw order data from cdc debezium landing tables"
     columns:
       - name: order_id
         description: "Order id (primary key)."
         data_tests:
           - unique
           - not_null
-      - name: _is_deleted
+      - name: order_timestamp
+        data_tests:
+          - not_null
+      - name: order_date
+        data_tests:
+          - not_null
+      - name: user_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('users')
+                field: user_id
+      - name: r_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('restaurant')
+                field: id
+      - name: items_count
+        data_tests:
+          - not_null
+      - name: sales_qty
+        data_tests:
+          - not_null
+      - name: sales_amount
+        data_tests:
+          - not_null
+      - name: payment_method
+        data_tests:
+          - not_null
+      - name: order_status
+        data_tests:
+          - not_null
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: updated_at
         data_tests:
           - not_null
 
   - name: reviews
-    description: "Latest review CDC state, one row per review_id."
+    description: "Raw review data from cdc debezium landing tables"
     columns:
       - name: review_id
         description: "Review id (primary key)."
         data_tests:
           - unique
           - not_null
-      - name: _is_deleted
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('orders')
+                field: order_id
+      - name: user_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('users')
+                field: user_id
+      - name: restaurant_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('restaurant')
+                field: id
+      - name: rating
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+      - name: is_deleted
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: updated_at
         data_tests:
           - not_null

@@ -8,7 +8,7 @@
 with source as (
     select * from {{ source('landing', 'menu') }}
     {% if is_incremental() %}
-    where _load_date > (select coalesce(max(_load_date), '1970-01-01'::timestamp) from {{ this }})
+    where _load_date > (select coalesce(max(updated_at), '1970-01-01'::timestamp) from {{ this }})
     {% endif %}
 ),
 latest as (

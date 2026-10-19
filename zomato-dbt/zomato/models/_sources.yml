@@ -5,15 +5,46 @@ sources:
     tables:
       - name: restaurant
         description: "Raw restaurants data from Zomato"
+        columns:
+          - name: id
+            data_tests:
+              - not_null
       - name: reviews
         description: "Raw reviews data from Zomato"
+        columns:
+          - name: review_id
+            data_tests:
+              - not_null
       - name: users
         description: "Raw users data from Zomato"
+        columns:
+          - name: user_id
+            data_tests:
+              - not_null
       - name: food
         description: "Raw food data from Zomato"
+        columns:
+          - name: f_id
+            data_tests:
+              - not_null
       - name: menu
         description: "Raw menu data from Zomato"
+        columns:
+          - name: menu_id
+            data_tests:
+              - not_null
+          - name: f_id
+            data_tests:
+              - not_null
       - name: orders
         description: "Raw orders data from Zomato"
+        columns:
+          - name: order_id
+            data_tests:
+              - not_null
       - name: order_items
         description: "Raw order items data from Zomato"
+        columns:
+          - name: order_item_id
+            data_tests:
+              - not_null

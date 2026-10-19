@@ -1,0 +1,281 @@
+models:
+  - name: stg_food
+    description: "Cleaned food items (deleted rows excluded)."
+    columns:
+      - name: food_id
+        description: "Primary key."
+        data_tests:
+          - unique
+          - not_null
+      - name: food_name
+        data_tests:
+          - not_null
+      - name: veg_or_non_veg
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Veg', 'Non-Veg', 'Unknown']
+
+  - name: stg_menu
+    description: "Menu rows linking restaurants to food (deleted rows excluded). Key is (menu_id, food_id)."
+    columns:
+      - name: menu_id
+        data_tests:
+          - not_null
+      - name: restaurant_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_restaurant')
+                field: restaurant_id
+              config:
+                severity: warn
+      - name: food_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_food')
+                field: food_id
+              config:
+                severity: warn
+      - name: cuisine
+        data_tests:
+          - not_null
+      - name: price
+        data_tests:
+          - not_null
+
+  - name: stg_order_items
+    description: "Order line items (deleted rows excluded)."
+    columns:
+      - name: order_item_id
+        description: "Primary key."
+        data_tests:
+          - unique
+          - not_null
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: restaurant_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_restaurant')
+                field: restaurant_id
+      - name: food_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_food')
+                field: food_id
+              config:
+                severity: warn
+      - name: price
+        data_tests:
+          - not_null
+      - name: quantity
+        data_tests:
+          - not_null
+      - name: line_amount
+        data_tests:
+          - not_null
+
+  - name: stg_orders
+    description: "Cleaned orders (deleted rows excluded)."
+    columns:
+      - name: order_id
+        description: "Primary key."
+        data_tests:
+          - unique
+          - not_null
+      - name: order_timestamp
+        data_tests:
+          - not_null
+      - name: order_date
+        data_tests:
+          - not_null
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_users')
+                field: customer_id
+      - name: restaurant_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_restaurant')
+                field: restaurant_id
+      - name: city
+        data_tests:
+          - not_null
+      - name: cuisine
+        data_tests:
+          - not_null
+      - name: items_count
+        data_tests:
+          - not_null
+      - name: sales_qty
+        data_tests:
+          - not_null
+      - name: subtotal
+        data_tests:
+          - not_null
+      - name: discount
+        data_tests:
+          - not_null
+      - name: delivery_fee
+        data_tests:
+          - not_null
+      - name: gst
+        data_tests:
+          - not_null
+      - name: sales_amount
+        data_tests:
+          - not_null
+      - name: currency
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['INR']
+      - name: payment_method
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['UPI', 'Card', 'Wallet', 'COD', 'NetBanking']
+      - name: order_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Delivered', 'Cancelled', 'Refunded']
+      - name: is_delivered
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: customer_rating
+        description: "Nullable (3,592,803 nulls); must be 1-5 when present."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+      - name: delivery_time_min
+        description: "Nullable (849,878 nulls); free-text durations, not validated."
+
+  - name: stg_reviews
+    description: "Cleaned reviews that have a comment (deleted rows excluded)."
+    columns:
+      - name: review_id
+        description: "Primary key."
+        data_tests:
+          - unique
+          - not_null
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_users')
+                field: customer_id
+      - name: restaurant_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_restaurant')
+                field: restaurant_id
+      - name: rating
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5]
+      - name: comment
+        data_tests:
+          - not_null
+      - name: review_date
+        data_tests:
+          - not_null
+  
+  - name: stg_restaurant
+    description: "Cleaned restaurants (rows with non-numeric ids excluded)."
+    columns:
+      - name: restaurant_id
+        description: "Primary key."
+        data_tests:
+          - unique
+          - not_null
+      - name: restaurant_name
+        description: "Nullable: 86 source rows have no name."
+      - name: city
+        data_tests:
+          - not_null
+      - name: rating
+        description: "Nullable (87,100 nulls); 1-5 range enforced by tests/stg_restaurant_rating_range.sql."
+      - name: rating_count
+        data_tests:
+          - not_null
+
+  - name: stg_users
+    description: "Cleaned customers (deleted rows excluded)."
+    columns:
+      - name: customer_id
+        description: "Primary key."
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_name
+        data_tests:
+          - not_null
+      - name: email
+        data_tests:
+          - not_null
+      - name: age
+        data_tests:
+          - not_null
+      - name: gender
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Male', 'Female']
+      - name: marital_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Single', 'Married', 'Prefer not to say']
+      - name: occupation
+        data_tests:
+          - not_null
+      - name: income_band
+        data_tests:
+          - not_null
+      - name: educational_qualifications
+        data_tests:
+          - not_null
+      - name: family_size
+        data_tests:
+          - not_null

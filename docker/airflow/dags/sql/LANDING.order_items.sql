@@ -15,6 +15,6 @@ FROM (
       $1:__source_ts_ms::NUMBER,
       CURRENT_TIMESTAMP()::TIMESTAMP,
       METADATA$FILENAME
-    FROM @ZOMATO.LANDING.S3_CDC_STAGE/order_items/load_date={{ params.load_date }}/
+    FROM @ZOMATO.LANDING.S3_CDC_STAGE/order_items/load_date={{ ds }}/
 )
 FILE_FORMAT = (TYPE = PARQUET);
