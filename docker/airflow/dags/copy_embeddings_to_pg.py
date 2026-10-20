@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 import psycopg2
+from psycopg2.extras import execute_values
 import snowflake.connector as conn
 from pgvector.psycopg2 import register_vector
 
@@ -11,10 +12,12 @@ load_dotenv()
 
 # Configuration
 EMBED_DIM = int(os.getenv("EMBED_DIM", "768"))
-# BATCH = 1000
-# CHUNK_SIZE = 500
-BATCH = 10
-CHUNK_SIZE = 5
+BATCH = 1000
+CHUNK_SIZE = 200
+# Runaway guard only; the loop is expected to end on an empty page.
+MAX_PAGES = int(os.getenv("EMBED_COPY_MAX_PAGES", "200"))
+# BATCH = 10
+# CHUNK_SIZE = 5
 
 SNOWFLAKE_SOURCE_TABLE = "ZOMATO.AI.REVIEW_EMBEDDINGS"
 POSTGRES_TARGET_TABLE = "public.review_embeddings"
@@ -43,28 +46,48 @@ def get_postgres_connection():
     return conn_pg
 
 
-def get_pg_watermark(cursor_pg) -> datetime:
+def get_pg_cursor(cursor_pg):
+    """Return the last (embedded_at, review_id) already committed to Postgres.
+
+    A single-timestamp watermark cannot express progress through a group of rows
+    that share one EMBEDDED_AT, so the cursor is the pair. Defaults to the epoch
+    and review_id -1 when the sink is empty.
+    """
     cursor_pg.execute(
-        f"SELECT COALESCE(MAX(embedded_at), '1970-01-01 00:00:00+00'::timestamptz) FROM {POSTGRES_TARGET_TABLE} LIMIT 1"
+        f"""
+        SELECT embedded_at, review_id
+        FROM {POSTGRES_TARGET_TABLE}
+        ORDER BY embedded_at DESC, review_id DESC
+        LIMIT 1
+        """
     )
-    result = cursor_pg.fetchone()
-    watermark = result[0] if result and result[0] is not None else datetime(1970, 1, 1, tzinfo=timezone.utc)
-    if watermark.tzinfo is None:
-        watermark = watermark.replace(tzinfo=timezone.utc)
-    return watermark
+    row = cursor_pg.fetchone()
+    if not row or row[0] is None:
+        return datetime(1970, 1, 1, tzinfo=timezone.utc), -1
+
+    embedded_at, review_id = row
+    if embedded_at.tzinfo is None:
+        embedded_at = embedded_at.replace(tzinfo=timezone.utc)
+    return embedded_at, int(review_id)
 
 
-def fetch_deltas_from_snowflake(cursor_sf, watermark: datetime, limit: int):
+def fetch_deltas_from_snowflake(cursor_sf, cursor_at: datetime, cursor_id: int, limit: int):
+    """Fetch the next page strictly after (cursor_at, cursor_id).
+
+    The pair predicate is what makes a page impossible to repeat: rows tied on
+    EMBEDDED_AT are walked in review_id order instead of being re-returned.
+    """
     cursor_sf.execute(
         f"""
         SELECT REVIEW_ID, ORDER_ID, RESTAURANT_ID, RATING, COMMENT,
                ROW_HASH, EMBEDDING, EMBEDDING_MODEL, EMBEDDED_AT
         FROM {SNOWFLAKE_SOURCE_TABLE}
-        WHERE EMBEDDED_AT >= %s
+        WHERE (EMBEDDED_AT > %s)
+           OR (EMBEDDED_AT = %s AND REVIEW_ID > %s)
         ORDER BY EMBEDDED_AT ASC, REVIEW_ID ASC
         LIMIT {limit}
         """,
-        (watermark,),
+        (cursor_at, cursor_at, cursor_id),
     )
     return cursor_sf.fetchall()
 
@@ -87,12 +110,11 @@ def _to_float_list(embedding):
 def save_to_postgres(cursor_pg, rows):
     if not rows:
         return 0
-
     upsert_sql = f"""
         INSERT INTO {POSTGRES_TARGET_TABLE}
             (review_id, order_id, restaurant_id, rating, comment, row_hash,
              embedding, embedding_model, embedded_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s::vector({EMBED_DIM}), %s, %s)
+        VALUES %s
         ON CONFLICT (review_id) DO UPDATE
         SET
             order_id = EXCLUDED.order_id,
@@ -105,9 +127,10 @@ def save_to_postgres(cursor_pg, rows):
             embedded_at = EXCLUDED.embedded_at
         WHERE {POSTGRES_TARGET_TABLE}.row_hash IS DISTINCT FROM EXCLUDED.row_hash
     """
+    template = f"(%s, %s, %s, %s, %s, %s, %s::vector({EMBED_DIM}), %s, %s)"
 
     buffer = []
-    saved = 0
+    affected = 0
     for r in rows:
         review_id, order_id, restaurant_id, rating, comment, row_hash, embedding, embedding_model, embedded_at = r
         embedding_list = _to_float_list(embedding)
@@ -130,14 +153,17 @@ def save_to_postgres(cursor_pg, rows):
             )
         )
         if len(buffer) >= CHUNK_SIZE:
-            cursor_pg.executemany(upsert_sql, buffer)
-            saved += len(buffer)
+            # One statement per chunk instead of one execution per row. Note this
+            # does NOT batch the HNSW index work: pgvector maintains the graph per
+            # row via the index AM, so only round trips and parse/plan are saved.
+            execute_values(cursor_pg, upsert_sql, buffer, template=template, page_size=CHUNK_SIZE)
+            affected += cursor_pg.rowcount  # real upserts; hash-match rows are skipped
             buffer.clear()
     if buffer:
-        cursor_pg.executemany(upsert_sql, buffer)
-        saved += len(buffer)
+        execute_values(cursor_pg, upsert_sql, buffer, template=template, page_size=CHUNK_SIZE)
+        affected += cursor_pg.rowcount
         buffer.clear()
-    return saved
+    return affected
 
 
 def process_deltas(sf_rows, cursor_pg):
@@ -164,21 +190,37 @@ def main():
         conn_pg_check = get_postgres_connection()
         cur_pg_check = conn_pg_check.cursor()
         
-        count = 0
-        while count < 1:
-            watermark = get_pg_watermark(cur_pg_check)
-            print(f"Current watermark: {watermark}")
-            
-            deltas = fetch_deltas_from_snowflake(cur_sf, watermark, BATCH)
-            print(f"Fetched {len(deltas)} delta(s) from Snowflake.")
+        cursor_at, cursor_id = get_pg_cursor(cur_pg_check)
+        print(f"Starting cursor: ({cursor_at}, {cursor_id})")
+
+        pages = 0
+        total_affected = 0
+
+        # Each page ends with a strictly greater cursor, so this terminates once
+        # Snowflake has no row after it. MAX_PAGES is a runaway guard, not the
+        # expected exit.
+        while pages < MAX_PAGES:
+            deltas = fetch_deltas_from_snowflake(cur_sf, cursor_at, cursor_id, BATCH)
             if not deltas:
-                print("No new embeddings to copy to Postgres.")
-                return
-            
-            print(f"Copying {len(deltas)} embedding(s) from Snowflake to Postgres (watermark={watermark})...")
-            saved = process_deltas(deltas, cur_pg_check)
-            print(f"Done: upserted {saved} row(s) into {POSTGRES_TARGET_TABLE}")
-            count += 1
+                print(f"Drained: no rows after ({cursor_at}, {cursor_id}).")
+                break
+
+            print(f"Page {pages + 1}: {len(deltas)} row(s) after ({cursor_at}, {cursor_id})")
+            affected = process_deltas(deltas, cur_pg_check)
+
+            # Commit before advancing, so a crash re-reads from the last page that
+            # actually landed. Replays are no-ops thanks to the row_hash guard.
+            conn_pg_check.commit()
+
+            last = deltas[-1]
+            cursor_at, cursor_id = last[8], int(last[0])
+            total_affected += affected
+            pages += 1
+            print(f"  -> upserted {affected}, cursor now ({cursor_at}, {cursor_id})")
+
+        if pages >= MAX_PAGES:
+            print(f"Stopped at MAX_PAGES={MAX_PAGES}; more rows may remain.")
+        print(f"Done: {total_affected} row(s) upserted over {pages} page(s) into {POSTGRES_TARGET_TABLE}")
     except Exception as e:
         print(f"An error occurred while copying embeddings to Postgres: {e}")
         raise

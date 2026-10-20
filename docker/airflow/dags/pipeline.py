@@ -14,6 +14,7 @@ from airflow.task.trigger_rule import TriggerRule
 import embedding_reviews
 import enrich_reviews
 import copy_embeddings_to_pg
+import reindex_embeddings_hnsw
 import kafka_export
 
 DBT = "/opt/airflow/dbt_venv/bin/dbt"
@@ -113,6 +114,11 @@ with DAG(
         python_callable=copy_embeddings_to_pg.main,
     )
 
+    reindex_embeddings_hnsw = PythonOperator(
+        task_id="reindex_embeddings_hnsw",
+        python_callable=reindex_embeddings_hnsw.main,
+    )
+
     dbt_build_marts = BashOperator(
         task_id="dbt_build_marts",
         bash_command=f"{DBT} run --select marts --project-dir {DBT_PROJECT} --profiles-dir {DBT_PROJECT}",
@@ -122,8 +128,7 @@ with DAG(
         task_id="dbt_marts_test",
         bash_command=f"{DBT} test --select marts --project-dir {DBT_PROJECT} --profiles-dir {DBT_PROJECT}",
     )
-
-    # landing_tasks >> dbt_build_raw
+    
     landing_tasks >> dbt_landing_test >> dbt_build_raw >> dbt_raw_test >> dbt_build_staging >> dbt_staging_test >> [enrich, embedding]
-    embedding >> copy_embeddings_to_postgres
+    embedding >> copy_embeddings_to_postgres >> reindex_embeddings_hnsw
     enrich >> dbt_build_marts >> dbt_marts_test

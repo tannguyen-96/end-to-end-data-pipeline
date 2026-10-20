@@ -103,3 +103,8 @@ create index if not exists review_embeddings_embedding_hnsw
 
 create index if not exists review_embeddings_restaurant_id_idx
     on public.review_embeddings (restaurant_id);
+
+-- Cursor lookup for the Snowflake -> Postgres embedding copy: it reads the max
+-- (embedded_at, review_id) already committed, so this should not be a seq scan.
+create index if not exists review_embeddings_embedded_at_review_id_idx
+    on public.review_embeddings (embedded_at, review_id);

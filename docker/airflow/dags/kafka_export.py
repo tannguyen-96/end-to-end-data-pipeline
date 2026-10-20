@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ProcessPoolExecutor
-import base64
-from decimal import Decimal
 import json
 import os
 import queue
@@ -14,6 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from kafka import KafkaConsumer
 from kafka.structs import OffsetAndMetadata, TopicPartition
+import helpers as helpers
 
 TABLES = ["menu", "orders", "users", "restaurant", "reviews", "food", "order_items"]
 
@@ -32,15 +31,6 @@ NUMERIC_COLUMNS: dict[str, dict[str, int]] = {
     "order_items": {"price": 2, "line_amount": 2},
 }
 
-def _decode_numeric(value: str | None, scale: int) -> Decimal | None:
-    """base64 (two's-complement big-endian, unscaled) -> Decimal scaled by 10**-scale."""
-    if value is None or not isinstance(value, str):
-        return value
-    bytes = base64.b64decode(value)
-    unscaled = int.from_bytes(bytes, byteorder="big", signed=True)
-    return Decimal(unscaled).scaleb(-scale)
-
-
 def decode_numerics(table: str, rows: list) -> list:
     """Rewrite Debezium base64 `numeric` columns to Decimal in-place (Parquet keeps precision)."""
     columns = NUMERIC_COLUMNS.get(table)
@@ -49,7 +39,7 @@ def decode_numerics(table: str, rows: list) -> list:
     for row in rows:
         for column, scale in columns.items():
             if column in row:
-                row[column] = _decode_numeric(row[column], scale)
+                row[column] = helpers._decode_numeric(row[column], scale)
     return rows
 
 
@@ -198,6 +188,20 @@ def export_partition(table: str, partition: int, ds: str) -> int:
         return total[0]
     finally:
         consumer.close()
+
+# def export_partition(table: str, partition: int, ds: str) -> int:
+#     topic = f"{TOPIC_PREFIX}.{table}"
+#     tp = TopicPartition(topic, partition)
+#     print(f"Exporting partition: {tp}")
+#     consumer = KafkaConsumer(
+#         bootstrap_servers=BOOTSTRAP_SERVERS,
+#         group_id=GROUP_ID,
+#         auto_offset_reset="earliest",  # first run picks up the Debezium snapshot
+#         enable_auto_commit=False,      # set manual commit offset
+#         value_deserializer=None,       # keep raw bytes, decode later in uploader threads
+#     )
+#     consumer.assign([tp])
+#     return consumer
 
 def export_parallel(table: str, ds: str) -> int:
     # Give the metadata probe a group id so it doesn't log "disabling auto-commit".

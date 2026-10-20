@@ -1,11 +1,24 @@
 TODO1 --DONE
 Postgres source -> CDC debezium to Kafka -> Airflow dag stream Kafka to s3
 
-TODO2 --50%
-S3 to snowflake incremental -> merge into raw table
+TODO2 --DONE
+S3 to snowflake incremental -> merge into raw table 
 
-TODO3 
-Transformation
+TODO3 --DONE
+Transformation dbt staging, marts (dim, fact)
 
-TODO4
-LLMs enrichment -> Build vector table -> similarity search engine
+TODO4 --DONE
+LLMs enrichment -> marts
+Embedding -> semantic search
+
+TODO5 
+Refactor/Enhancement
+
+TODO6
+Investigate food table, build enrich, embedding (plan for chatbot)
+
+TODO7
+Backend API/UI
+
+TODO8
+Build chatbot

@@ -1,20 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "agent": {
-    "big-pickle": {
+    "build": {
       "description": "Big-Pickle",
       "mode": "primary",
       "model": "opencode/big-pickle"
     },
-    "deepseek": {
-      "description": "DeepSeek",
+    "plan": {
+      "description": "Big-Pickle",
       "mode": "primary",
-      "model": "opencode/deepseek"
-    },
-    "mimo": {
-      "description": "MiMo",
-      "mode": "primary",
-      "model": "opencode/north-mini-code-free"
+      "model": "opencode/big-pickle"
     },
     "subagent": {
       "description": "Subagent",

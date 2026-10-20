@@ -23,7 +23,7 @@ import boto3
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
+DATA_DIR = ROOT / "data/dataset"
 
 # The two largest tables (optional raw staging).
 FILES = [
