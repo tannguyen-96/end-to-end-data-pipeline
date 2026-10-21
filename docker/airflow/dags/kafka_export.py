@@ -12,7 +12,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from kafka import KafkaConsumer
 from kafka.structs import OffsetAndMetadata, TopicPartition
-import helpers as helpers
+from utils.helpers import decode_numeric
+from utils.constants import S3_BUCKET
 
 TABLES = ["menu", "orders", "users", "restaurant", "reviews", "food", "order_items"]
 
@@ -39,7 +40,7 @@ def decode_numerics(table: str, rows: list) -> list:
     for row in rows:
         for column, scale in columns.items():
             if column in row:
-                row[column] = helpers._decode_numeric(row[column], scale)
+                row[column] = decode_numeric(row[column], scale)
     return rows
 
 
@@ -49,16 +50,15 @@ GROUP_ID = os.environ.get("KAFKA_GROUP_ID", "airflow-kafka-to-s3")
 
 CHUNK_MAX_RECORDS = int(os.environ.get("CHUNK_MAX_RECORDS", "50_000"))
 CHUNK_MAX_BYTES = int(os.environ.get("CHUNK_MAX_BYTES", "32_000_000"))
-QUEUE_SIZE = int(os.environ.get("QUEUE_SIZE", "2"))
-UPLOAD_WORKERS = int(os.environ.get("UPLOAD_WORKERS", "2"))
-UPLOAD_MAX_RETRIES = int(os.environ.get("UPLOAD_MAX_RETRIES", "5"))
+# QUEUE_SIZE = int(os.environ.get("QUEUE_SIZE", "2"))
+# UPLOAD_WORKERS = int(os.environ.get("UPLOAD_WORKERS", "2"))
+UPLOAD_MAX_RETRIES = int(os.environ.get("UPLOAD_MAX_RETRIES", "3"))
 UPLOAD_BACKOFF_BASE_S = float(os.environ.get("UPLOAD_BACKOFF_BASE_S", "1"))
 IDLE_TIMEOUT_MS = int(os.environ.get("IDLE_TIMEOUT_MS", "10_000"))
 
 def _s3_key(table: str, partition: int, ds: str, start: int, end: int) -> str:
     # table/load_date=2026-01-01/table-p0-o0-50000.parquet
     return f"{table}/load_date={ds}/{table}-p{partition}-o{start}-{end}.parquet"
-
 
 def upload_to_s3(table: str, partition: int, ds: str, start: int, end: int,
                  rows: list) -> None:
@@ -71,123 +71,22 @@ def upload_to_s3(table: str, partition: int, ds: str, start: int, end: int,
     pq.write_table(pa.Table.from_pylist(rows), buffer)
     body = buffer.getvalue().to_pybytes() # parquet format bytes
 
-    bucket = os.environ["S3_BUCKET"]
     key = _s3_key(table, partition, ds, start, end)
     client = boto3.client("s3", region_name=os.environ.get("AWS_DEFAULT_REGION")) # get s3 client
-    attempt = 1
-    while True:
+    for attempt in range(1, UPLOAD_MAX_RETRIES + 1):
         try:
-            client.put_object(Bucket=bucket, Key=key, Body=body) # try upload to s3
+            client.put_object(Bucket=S3_BUCKET, Key=key, Body=body) # try upload to s3
             break
         except Exception as exc:  # if any failed
-            if attempt >= UPLOAD_MAX_RETRIES:
-                raise  # throw error after exceeding max retries
+            if attempt == UPLOAD_MAX_RETRIES:
+                raise
             delay = UPLOAD_BACKOFF_BASE_S * (2 ** (attempt - 1)) # backoff delay standard improve with backoff and jitter https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-            print(f"{table} p{partition}: upload retry {attempt}/{UPLOAD_MAX_RETRIES} "
+            print(f"table:{table}-partition:{partition}: upload retry {attempt}/{UPLOAD_MAX_RETRIES} "
                   f"in {delay:.0f}s after {exc!r}")
             time.sleep(delay)
-            attempt += 1
-    print(f"{table}: {len(rows)} records -> s3://{bucket}/{key}")
 
+    print(f"table:{table}-partition:{partition}: {len(rows)} records -> s3://{S3_BUCKET}/{key}")
 
-def export_partition(table: str, partition: int, ds: str) -> int:
-    topic = f"{TOPIC_PREFIX}.{table}"
-    tp = TopicPartition(topic, partition)
-    print(f"Exporting partition: {tp}")
-    consumer = KafkaConsumer(
-        bootstrap_servers=BOOTSTRAP_SERVERS,
-        group_id=GROUP_ID,
-        auto_offset_reset="earliest",  # first run picks up the Debezium snapshot
-        enable_auto_commit=False,      # set manual commit offset
-        value_deserializer=None,       # keep raw bytes, decode later in uploader threads
-    )
-    try:
-        consumer.assign([tp])
-        end = consumer.end_offsets([tp])[tp]
-        print(f"Partition end offset: {end}")
-
-        chunks: queue.Queue = queue.Queue(maxsize=QUEUE_SIZE)
-        results: dict[int, int] = {}        # chunk seq -> end offset (uploaded OK)
-        first_failure: list = []            # [(seq, exc)] once a chunk gives up
-        total: list[int] = [0]              # records uploaded this run
-        lock = threading.Lock()
-
-        def reader() -> None:
-            """Poll the partition -> emit bounded chunks (put() blocks = backpressure)."""
-            seq, rows, start, size, last = 0, [], None, 0, None
-
-            # reset after put to the chunks
-            def flush() -> None:
-                nonlocal seq, rows, start, size
-                if not rows:
-                    return
-                chunks.put((seq, start, last + 1, rows))
-                total[0] += len(rows)
-                seq += 1
-                rows, start, size = [], None, 0
-
-            try: # loop partition
-                while consumer.position(tp) < end:
-                    batch = consumer.poll(timeout_ms=IDLE_TIMEOUT_MS,
-                                          max_records=CHUNK_MAX_RECORDS)
-                    for records in batch.values():
-                        for rec in records:
-                            if start is None:
-                                start = rec.offset # set start = first read offset
-                            last = rec.offset # set each offset after as last (on first message start = last)
-                            rows.append(rec.value)
-                            size += rec.serialized_value_size
-                            # if reach max message or max bytes, flush the chunk
-                            if len(rows) >= CHUNK_MAX_RECORDS or size >= CHUNK_MAX_BYTES:
-                                flush()
-                flush() # flush the rest
-            finally:
-                for _ in range(UPLOAD_WORKERS):
-                    chunks.put(None) # after each end offset put a None to chunks
-
-        def uploader() -> None:
-            while True: # start loop
-                item = chunks.get() # get the next chunk (blocks if none available)
-                if item is None:
-                    return # break if receive None
-                seq, start, end_off, rows = item # use to build s3 filename
-                with lock:
-                    already_failed = bool(first_failure) # True if any failed
-                if not already_failed: # prevent further uploads if any chunk has already failed
-                    try:
-                        upload_to_s3(table, partition, ds, start, end_off, rows)
-                        with lock:
-                            results[seq] = end_off # save the end offset after upload chunk ex: { 0: 50000, 1: 100000 }
-                    except Exception as exc:
-                        with lock:
-                            if not first_failure:
-                                first_failure.append((seq, exc)) # record any failed
-
-        workers = [threading.Thread(target=uploader, daemon=True)
-                   for _ in range(UPLOAD_WORKERS)]
-        for w in workers: # start 2 worker threads listening for chunks
-            w.start()
-        reader() # start reading and chunking the data
-        for w in workers:
-            w.join() # wait for all worker threads to finish
-
-        if first_failure:
-            seq, exc = first_failure[0]
-            raise RuntimeError(f"{topic} p{partition}: chunk {seq} upload failed after "
-                               f"{UPLOAD_MAX_RETRIES} retries: {exc!r}") from exc
-
-        committed = 0
-        seq = 0
-        while seq in results: # loop and find latest committed offset
-            committed = results[seq]
-            seq += 1
-        if committed:
-            # kafka-python 3.x requires OffsetAndMetadata
-            consumer.commit({tp: OffsetAndMetadata(committed)})
-        print(f"{topic} p{partition}: {total[0]} records committed @ {committed}")
-        return total[0]
-    finally:
-        consumer.close()
 
 # def export_partition(table: str, partition: int, ds: str) -> int:
 #     topic = f"{TOPIC_PREFIX}.{table}"
@@ -200,19 +99,163 @@ def export_partition(table: str, partition: int, ds: str) -> int:
 #         enable_auto_commit=False,      # set manual commit offset
 #         value_deserializer=None,       # keep raw bytes, decode later in uploader threads
 #     )
-#     consumer.assign([tp])
-#     return consumer
+#     try:
+#         consumer.assign([tp])
+#         end = consumer.end_offsets([tp])[tp]
+#         print(f"Partition end offset: {end}")
 
-def export_parallel(table: str, ds: str) -> int:
-    # Give the metadata probe a group id so it doesn't log "disabling auto-commit".
+#         chunks: queue.Queue = queue.Queue(maxsize=QUEUE_SIZE)
+#         results: dict[int, int] = {}        # chunk seq -> end offset (uploaded OK)
+#         first_failure: list = []            # [(seq, exc)] once a chunk gives up
+#         total: list[int] = [0]              # records uploaded this run
+#         lock = threading.Lock()
+
+#         def reader() -> None:
+#             """Poll the partition -> emit bounded chunks (put() blocks = backpressure)."""
+#             seq, rows, start, size, last = 0, [], None, 0, None
+
+#             # reset after put to the chunks
+#             def flush() -> None:
+#                 nonlocal seq, rows, start, size
+#                 if not rows:
+#                     return
+#                 chunks.put((seq, start, last + 1, rows))
+#                 total[0] += len(rows)
+#                 seq += 1
+#                 rows, start, size = [], None, 0
+
+#             try: # loop partition
+#                 while consumer.position(tp) < end:
+#                     batch = consumer.poll(timeout_ms=IDLE_TIMEOUT_MS,
+#                                           max_records=CHUNK_MAX_RECORDS)
+#                     for records in batch.values():
+#                         for rec in records:
+#                             if start is None:
+#                                 start = rec.offset # set start = first read offset
+#                             last = rec.offset # set each offset after as last (on first message start = last)
+#                             rows.append(rec.value)
+#                             size += rec.serialized_value_size
+#                             # if reach max message or max bytes, flush the chunk
+#                             if len(rows) >= CHUNK_MAX_RECORDS or size >= CHUNK_MAX_BYTES:
+#                                 flush()
+#                 flush() # flush the rest
+#             finally:
+#                 for _ in range(UPLOAD_WORKERS):
+#                     chunks.put(None) # after each end offset put a None to chunks
+
+#         def uploader() -> None:
+#             while True: # start loop
+#                 item = chunks.get() # get the next chunk (blocks if none available)
+#                 if item is None:
+#                     return # break if receive None
+#                 seq, start, end_off, rows = item # use to build s3 filename
+#                 with lock:
+#                     already_failed = bool(first_failure) # True if any failed
+#                 if not already_failed: # prevent further uploads if any chunk has already failed
+#                     try:
+#                         upload_to_s3(table, partition, ds, start, end_off, rows)
+#                         with lock:
+#                             results[seq] = end_off # save the end offset after upload chunk ex: { 0: 50000, 1: 100000 }
+#                     except Exception as exc:
+#                         with lock:
+#                             if not first_failure:
+#                                 first_failure.append((seq, exc)) # record any failed
+
+#         workers = [threading.Thread(target=uploader, daemon=True)
+#                    for _ in range(UPLOAD_WORKERS)]
+#         for w in workers: # start 2 worker threads listening for chunks
+#             w.start()
+#         reader() # start reading and chunking the data
+#         for w in workers:
+#             w.join() # wait for all worker threads to finish
+
+#         if first_failure:
+#             seq, exc = first_failure[0]
+#             raise RuntimeError(f"{topic} p{partition}: chunk {seq} upload failed after "
+#                                f"{UPLOAD_MAX_RETRIES} retries: {exc!r}") from exc
+
+#         committed = 0
+#         seq = 0
+#         while seq in results: # loop and find latest committed offset
+#             committed = results[seq]
+#             seq += 1
+#         if committed:
+#             # kafka-python 3.x requires OffsetAndMetadata
+#             consumer.commit({tp: OffsetAndMetadata(committed)})
+#         print(f"{topic} p{partition}: {total[0]} records committed @ {committed}")
+#         return {"message": f"{topic} p{partition}: committed @ {committed}", "total": total[0]}
+#     finally:
+#         consumer.close()
+
+def export_partition(table: str, partition: int, ds: str) -> dict:
+    topic = f"{TOPIC_PREFIX}.{table}"
+    tp = TopicPartition(topic, partition)
+    consumer = KafkaConsumer(
+        bootstrap_servers=BOOTSTRAP_SERVERS,
+        group_id=GROUP_ID,
+        auto_offset_reset="earliest",  # first run picks up the Debezium snapshot
+        enable_auto_commit=False,      # set manual commit offset
+        value_deserializer=None,       # keep raw bytes, decode later in uploader threads
+    )
+    try:
+        consumer.assign([tp])
+        total = 0
+        end = consumer.end_offsets([tp])[tp]
+        committed_offset = consumer.committed(tp)
+
+        if committed_offset is not None and committed_offset >= end:
+            return {"status": "success", "message": f"topic:{topic}-partition:{partition}: already up to date (committed @ {committed_offset}, end {end})", "total": 0}
+
+        rows, start, size, last = [], None, 0, None
+
+        def flush() -> None:
+            nonlocal rows, start, size, last, total, committed_offset
+            if not rows:
+                return
+            upload_to_s3(table, partition, ds, start, last, rows)
+            committed_offset = last + 1 # batch = 10 => offset from 0 to 9. Commit offset 10 which mean next message to consume is at offset 10
+            consumer.commit({tp: OffsetAndMetadata(committed_offset)})
+            total += len(rows)
+            rows, start, size, last = [], None, 0, None
+
+        while consumer.position(tp) < end:
+            batch = consumer.poll(timeout_ms=IDLE_TIMEOUT_MS, max_records=CHUNK_MAX_RECORDS)
+            if not batch:
+                break
+            for records in batch.values():
+                for rec in records:
+                    if start is None:
+                        start = rec.offset
+                    last = rec.offset
+                    rows.append(rec.value)
+                    size += rec.serialized_value_size
+                    if len(rows) >= CHUNK_MAX_RECORDS or size >= CHUNK_MAX_BYTES:
+                        flush()
+        flush()
+
+        return {"status": "success", "message": f"topic:{topic}-partition:{partition}: committed @ {committed_offset}", "total": total}
+    except Exception as e:
+        return {"status": "failed", "message": f"topic:{topic}-partition:{partition}: committed @ {committed_offset} due to error: {e}", "total": total}
+    finally:
+        consumer.close()
+
+def export_parallel(table: str, ds: str) -> dict:
     probe = KafkaConsumer(bootstrap_servers=BOOTSTRAP_SERVERS,
                           group_id=f"{GROUP_ID}-probe", enable_auto_commit=False)
     partitions = sorted(probe.partitions_for_topic(f"{TOPIC_PREFIX}.{table}"))
     probe.close()
 
-    with ProcessPoolExecutor(max_workers=1) as pool:
-        results = pool.map(export_partition,
+    with ProcessPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(export_partition,
                            [table] * len(partitions),
                            partitions,
-                           [ds] * len(partitions))
-        return sum(results)
+                           [ds] * len(partitions)))
+        for result in results:
+            print(f"status: {result['status']} - {result['message']} - total: {result['total']}")
+        if any(result['status'] == 'failed' for result in results):
+            raise RuntimeError("One or more partitions failed to export. Rerun needed.")
+            
+# if __name__ == "__main__":
+#     table = "food"
+#     ds = "2026-10-21"
+#     export_parallel(table, ds)

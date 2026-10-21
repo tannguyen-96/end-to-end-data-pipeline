@@ -1,34 +1,39 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from pathlib import Path
 
+# ==========================================
+# AIRFLOW
+# ==========================================
 from airflow import DAG
-from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.task.trigger_rule import TriggerRule
 
+# ==========================================
+# TASKS
+# ==========================================
 import embedding_reviews
 import enrich_reviews
 import copy_embeddings_to_pg
 import reindex_embeddings_hnsw
 import kafka_export
 
+# ==========================================
+# UTILS
+# ==========================================
+from utils.helpers import read_file
+
+SQL_DIR = Path(__file__).parent / "sql"
+LOAD_DATE = "{{ logical_date | ds }}"
 DBT = "/opt/airflow/dbt_venv/bin/dbt"
 DBT_PROJECT = "/opt/airflow/dbt/zomato"
 
-SNOWFLAKE_CONN_ID = 'snowflake_default' # Snowflake default connection ID for Airflow
-S3_BUCKET = os.environ["S3_BUCKET"]
-SQL_DIR = Path(__file__).parent / "sql"
-LOAD_DATE = "{{ logical_date | ds }}"
-
-def _read_sql(name: str) -> str:
-    return (SQL_DIR / name).read_text(encoding="utf-8")
-
-
+# ==========================================
+# DAG
+# ==========================================
 with DAG(
     dag_id="kafka_to_s3",
     description="End-to-end: Debezium CDC -> S3 Parquet -> Snowflake (COPY INTO _raw + MERGE)",
@@ -48,29 +53,16 @@ with DAG(
             op_kwargs={"table": table, "ds": LOAD_DATE},
         )
 
-        wait_for_files = S3KeySensor(
-            task_id=f"wait_{table}",
-            bucket_name=S3_BUCKET,
-            bucket_key=f"{table}/load_date={LOAD_DATE}/{table}-*.parquet",
-            wildcard_match=True,
-            aws_conn_id=None,
-            # timeout=60 * 30,
-            timeout=60 * 5,
-            poke_interval=60,  # check every 60 seconds
-            mode="reschedule",
-            soft_fail=True,
-        )
-
         copy_into_landing = SQLExecuteQueryOperator(
             task_id=f"merge_{table}_to_snowflake",
-            conn_id=SNOWFLAKE_CONN_ID,
-            sql=_read_sql(f"LANDING.{table}.sql"),
+            conn_id='snowflake_default',  # Snowflake default connection ID for Airflow
+            sql=read_file(SQL_DIR / f"LANDING.{table}.sql", typ='sql'),
             split_statements=True,
             autocommit=True,
         )
 
         landing_tasks.append(copy_into_landing)
-        consume >> wait_for_files >> copy_into_landing
+        consume >> copy_into_landing
 
     # Run dbt raw, only after EVERY table has finished landing in Snowflake.
     dbt_landing_test = BashOperator(
