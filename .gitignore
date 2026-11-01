@@ -23,3 +23,6 @@ docker/airflow/logs/
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Machine-local skill junctions (see skill-catalog skill)
+.opencode/skills/

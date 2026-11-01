@@ -1,0 +1,1 @@
+Update C:\Users\nghoa\Desktop\projects\end-to-end-data-pipeline\docs\Kafka-Parallel-Export.md to Kafka-Parallel-Export-v2.md rewrite it relate to step 8 in TIMELINE.md. Use C:\Users\nghoa\Desktop\projects\end-to-end-data-pipeline\docs\diagrams\kafka-export-v2 as chart import. Don't change any chart

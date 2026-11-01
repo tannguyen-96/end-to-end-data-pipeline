@@ -5,6 +5,17 @@
 End-to-end food-delivery data pipeline. Raw CSVs in `data/` are loaded into a local
 Dockerized Postgres, exported to S3, and loaded into Snowflake (Airflow orchestrates).
 
+## Agent defaults
+
+- **Speak caveman by default.** Load the `caveman` skill at the start of every session and use it
+  for all replies: answer first, no fluff, keep every technical fact.
+- Applies to explanations, plans, reviews, and status updates. Code, commit messages, and file
+  contents stay normal.
+- It stays on until the user says "stop caveman" or "normal mode" — then return to normal voice
+  for the rest of that session only.
+- Skip it when the user asks for full prose (docs, READMEs, PR descriptions, write-ups) or when
+  the terse register would make the answer ambiguous.
+
 ## Layout
 
 - `data/` — source CSVs, `ddl.sql`, importer/verifier, `ERD.md`.
@@ -65,3 +76,10 @@ python data/verify_data.py --db               # compare CSV row counts against t
   (`EMBED_BASE_URL`, `EMBED_MODELS`, `EMBED_DIM`). Default model is local Ollama
   `nomic-embed-text` (768 dims, `ollama pull nomic-embed-text`), reachable at
   `host.docker.internal:11434`.
+- Security skills (818 of them) are **not** installed — globally advertising them cost ~84k
+  context tokens per session. They live in the GitHub repo
+  `mukul975/Anthropic-Cybersecurity-Skills`; the always-available `skill-catalog` skill explains
+  discovery: `npx --yes skills@latest find <kw> --owner mukul975`, then one-off use via
+  `webfetch .../skills/<id>/SKILL.md` (or `npx skills use <repo>@<id>`) — no install needed.
+  Install only a repeatedly used skill, project-scoped, never with `-g`: `npx --yes
+  skills@latest add mukul975/Anthropic-Cybersecurity-Skills --skill <id> --agent opencode`.

@@ -108,3 +108,46 @@ create index if not exists review_embeddings_restaurant_id_idx
 -- (embedded_at, review_id) already committed, so this should not be a seq scan.
 create index if not exists review_embeddings_embedded_at_review_id_idx
     on public.review_embeddings (embedded_at, review_id);
+
+-- ---------------------------------------------------------------------------
+-- Postgres-native AI jobs (Snowflake free tier retired). These mirror
+-- ZOMATO.AI.REVIEW_ENRICHED / ZOMATO.AI.REVIEW_ENRICHMENT_CACHE and are written
+-- by docker/airflow/dags/enrich_reviews_pg.py.
+-- ---------------------------------------------------------------------------
+
+-- One row per review with the LLM sentiment/topic labels. row_hash = md5(comment)
+-- is the change detector, matching public.review_embeddings.row_hash.
+create table if not exists public.review_enriched (
+    review_id        integer primary key,
+    sentiment_label  text,                       -- POSITIVE / NEGATIVE / NEUTRAL
+    sentiment_score  real,                       -- -1.0 .. 1.0
+    topic            text,                       -- food quality / delivery / ...
+    key_issue        text,
+    model            text,
+    row_hash         text,                       -- md5(comment)
+    enriched_at      timestamptz not null default now()
+);
+
+-- One LLM call per distinct comment text. Comments repeat heavily in this
+-- dataset (300k reviews, 294 distinct comments), so this table is what keeps a
+-- full backfill at ~294 model calls instead of 300k.
+create table if not exists public.review_enrichment_cache (
+    comment_hash     text primary key,           -- md5(comment)
+    sentiment_label  text not null,
+    sentiment_score  real not null,
+    topic            text not null,
+    key_issue        text,
+    model            text not null,
+    created_at       timestamptz not null default now()
+);
+
+create index if not exists review_enriched_topic_idx
+    on public.review_enriched (topic);
+
+create index if not exists review_enriched_label_idx
+    on public.review_enriched (sentiment_label);
+
+-- The two AI jobs fan one distinct comment out to every review that carries it
+-- (WHERE md5(comment) = <hash>), so equality on the hash must not be a seq scan.
+create index if not exists reviews_comment_md5_idx
+    on public.reviews (md5(comment));
